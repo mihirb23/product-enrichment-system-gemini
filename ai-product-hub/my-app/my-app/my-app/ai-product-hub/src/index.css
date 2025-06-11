@@ -11,11 +11,3 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
-
-* {
-  box-sizing: border-box;
-}
-
-input, select, textarea, button {
-  font-family: inherit;
-}
