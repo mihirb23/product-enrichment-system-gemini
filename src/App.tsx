@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { Search, Filter, Plus, RefreshCw, Settings, Edit, Trash2, Upload, CheckCircle, XCircle, Clock, X, Copy } from 'lucide-react';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import './App.css';
 
 // Interfaces
@@ -131,83 +132,98 @@ const attributeDefinitions: AttributeDefinition[] = [
   { name: 'Status', type: 'short_text', group: 'system', aiEnrichment: false, variantSpecific: false, attributeGroup: ['System'], attributeDictionary: 'Product status', promptConfiguration: '' },
 ];
 
-// Fixed OpenAI API call function - removed Vite-specific syntax
-const callOpenAIAPI = async (prompt: string): Promise<any> => {
+// ENHANCED: Gemini API integration
+const createGeminiModel = () => {
+  const apiKey = process.env.REACT_APP_GEMINI_API_KEY;
+  
+  if (!apiKey) {
+    throw new Error('REACT_APP_GEMINI_API_KEY not found in environment variables. Please add it to your .env.local file.');
+  }
+
+  const genAI = new GoogleGenerativeAI(apiKey);
+  return genAI.getGenerativeModel({ 
+    model: "gemini-1.5-flash",
+    generationConfig: {
+      temperature: 0.3,
+      maxOutputTokens: 500,
+      responseMimeType: "application/json"
+    }
+  });
+};
+
+// Gemini API call function
+const callGeminiAPI = async (prompt: string): Promise<any> => {
   try {
-    console.log('Making OpenAI API call...');
+    console.log('=== Gemini API Call Started ===');
+    console.log('Prompt length:', prompt.length);
     
-    // Try to get API key from environment (CRA compatible)
-    const apiKey = process.env.REACT_APP_OPENAI_API_KEY || 
-                   process.env.OPENAI_API_KEY;
+    const apiKey = process.env.REACT_APP_GEMINI_API_KEY;
+    
+    console.log('Environment check:');
+    console.log('- API key exists:', !!apiKey);
+    console.log('- API key length:', apiKey ? apiKey.length : 0);
     
     if (!apiKey) {
-      // Fallback: try to make API call through a proxy endpoint
-      console.log('No API key found in environment, trying proxy endpoint...');
-      
-      const response = await fetch('/api/openai-proxy', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ prompt })
-      });
-
-      if (!response.ok) {
-        throw new Error(`API proxy error: ${response.status}`);
-      }
-
-      return await response.json();
+      throw new Error('REACT_APP_GEMINI_API_KEY not found in environment variables');
     }
 
-    const requestBody = {
-      model: "gpt-3.5-turbo",
-      messages: [
-        {
-          role: "system",
-          content: "You are an expert e-commerce product categorization specialist. You must respond with valid JSON only, no additional text or formatting."
-        },
-        {
-          role: "user",
-          content: prompt
-        }
-      ],
-      temperature: 0.3,
-      max_tokens: 500
-    };
-
-    console.log('Request body:', requestBody);
-
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify(requestBody)
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('OpenAI API error response:', errorText);
-      throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
-    }
-
-    const data = await response.json();
-    console.log('OpenAI API response:', data);
+    const model = createGeminiModel();
     
-    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-      throw new Error('Invalid response structure from OpenAI API');
+    const enhancedPrompt = `${prompt}
+
+IMPORTANT: You must respond with ONLY valid JSON in this exact format:
+{"category": "main_category", "googleCategory": "detailed > hierarchy"}
+
+No additional text, explanations, or markdown formatting. Only the JSON object.`;
+
+    console.log('Sending request to Gemini API...');
+    const result = await model.generateContent(enhancedPrompt);
+    const response = await result.response;
+    const text = response.text();
+
+    console.log('Gemini API response received successfully');
+    console.log('Raw response:', text);
+    
+    if (!text) {
+      throw new Error('Empty response from Gemini API');
     }
 
-    return data;
+    console.log('=== Gemini API Call Completed Successfully ===');
+    return { choices: [{ message: { content: text } }] };
 
   } catch (error) {
-    console.error('OpenAI API call failed:', error);
+    console.error('=== Gemini API Call Failed ===');
+    console.error('Error details:', error);
     throw error;
   }
 };
 
-// Enhanced enrichment function for all attributes using OpenAI
+// Test Gemini API connection
+const testGeminiConnection = async () => {
+  try {
+    const apiKey = process.env.REACT_APP_GEMINI_API_KEY;
+    console.log('Testing Gemini API connection...');
+    console.log('API Key exists:', !!apiKey);
+    
+    if (!apiKey) {
+      console.error('No API key found');
+      return false;
+    }
+
+    const model = createGeminiModel();
+    const result = await model.generateContent("Hello, this is a test message. Respond with: {'status': 'working'}");
+    const response = await result.response;
+    const text = response.text();
+    
+    console.log('Gemini API connection test successful:', text);
+    return true;
+  } catch (error) {
+    console.error('Gemini API connection test failed:', error);
+    return false;
+  }
+};
+
+// Enhanced enrichment function for all attributes using Gemini
 const enrichProductAttributes = async (product: Product, attributes: AttributeDefinition[]): Promise<Record<string, any>> => {
   const enrichedAttributes: Record<string, any> = {};
   
@@ -244,7 +260,7 @@ REQUIRED JSON FORMAT:
 
 Generate value for: "${attribute.name}"`;
 
-      const response = await callOpenAIAPI(attributePrompt);
+      const response = await callGeminiAPI(attributePrompt);
       const responseContent = response.choices[0].message.content;
       
       let attributeData;
@@ -309,7 +325,7 @@ const generateFallbackCategories = (productName: string, brand: string) => {
   };
 };
 
-// Modal components (keeping existing modal components unchanged)
+// Modal components
 const AddProductModal = React.memo(({ 
   show, 
   onClose, 
@@ -910,6 +926,7 @@ const ProductEnrichmentSystem = () => {
     unit: '',
     options: [] as string[]
   });
+
   // @ts-ignore
   const categories = [...new Set(products.map(p => p.category).filter(Boolean))] as string[];
   // @ts-ignore
@@ -917,12 +934,25 @@ const ProductEnrichmentSystem = () => {
   // @ts-ignore
   const allChannels = [...new Set(products.flatMap(p => p.channels || []))] as string[];
 
-  // FIXED: Enhanced enrichment function with better error handling and improved prompts
+  // Test Gemini connection on component mount
+  React.useEffect(() => {
+    testGeminiConnection();
+  }, []);
+
+  // ENHANCED: Main enrichment function using Gemini
   const enrichProducts = async (productIds: string[]) => {
-    console.log('Starting AI enrichment for products:', productIds);
+    console.log('=== GEMINI ENRICHMENT PROCESS STARTED ===');
+    console.log('Products to enrich:', productIds);
+    
+    // Test Gemini connection first
+    const connectionValid = await testGeminiConnection();
+    if (!connectionValid) {
+      alert('Gemini API connection test failed. Please check your Gemini API key configuration in .env.local file.');
+      return;
+    }
+    
     setIsEnriching(true);
     
-    // Update products to processing status
     setProducts(prev => prev.map(p => 
       productIds.includes(p.id) 
         ? { ...p, enrichmentStatus: 'processing' as const }
@@ -938,7 +968,6 @@ const ProductEnrichmentSystem = () => {
         try {
           console.log(`Processing: ${product.name} by ${product.brand}`);
           
-          // Create a more comprehensive and specific prompt for product categorization
           const enrichmentPrompt = `You are an expert e-commerce product categorization specialist. Categorize this product for online marketplaces:
 
 Product: "${product.name}"
@@ -960,24 +989,18 @@ INSTRUCTIONS:
 4. Be specific and accurate based on the actual product type
 5. Use standard e-commerce category naming conventions
 
-REQUIRED JSON FORMAT (respond with ONLY this JSON, no other text):
-{
-  "category": "main_category_name",
-  "googleCategory": "detailed > hierarchy > with > separators"
-}
-
 Product to categorize: "${product.name}" by "${product.brand}"`;
 
           console.log('Sending enrichment request for:', product.name);
-          const openaiResponse = await callOpenAIAPI(enrichmentPrompt);
+          const geminiResponse = await callGeminiAPI(enrichmentPrompt);
           
           let responseText = '';
-          if (openaiResponse?.choices?.[0]?.message?.content) {
-            responseText = openaiResponse.choices[0].message.content;
+          if (geminiResponse?.choices?.[0]?.message?.content) {
+            responseText = geminiResponse.choices[0].message.content;
             console.log('Response received:', responseText);
           } else {
-            console.error('Invalid OpenAI response structure:', openaiResponse);
-            throw new Error('Invalid response format from OpenAI API');
+            console.error('Invalid Gemini response structure:', geminiResponse);
+            throw new Error('Invalid response format from Gemini API');
           }
 
           let enrichedData;
@@ -1008,7 +1031,6 @@ Product to categorize: "${product.name}" by "${product.brand}"`;
                 };
                 console.log('Extracted data manually:', enrichedData);
               } else {
-                // Final fallback: provide reasonable defaults based on product name
                 enrichedData = generateFallbackCategories(product.name, product.brand);
                 console.log('Using fallback categorization:', enrichedData);
               }
@@ -1023,7 +1045,7 @@ Product to categorize: "${product.name}" by "${product.brand}"`;
             enrichedData = generateFallbackCategories(product.name, product.brand);
           }
 
-          // Enrich all attributes using OpenAI
+          // Enrich all attributes using Gemini
           console.log('Enriching product attributes...');
           const enrichedAttributes = await enrichProductAttributes(product, attributes);
 
@@ -1050,7 +1072,6 @@ Product to categorize: "${product.name}" by "${product.brand}"`;
 
         } catch (error) {
           console.error(`Error enriching product ${product.id}:`, error);
-          // Keep the product but mark as failed with fallback categories
           const fallbackData = generateFallbackCategories(product.name, product.brand);
           enrichedProducts.push({
             ...product,
@@ -1082,13 +1103,12 @@ Product to categorize: "${product.name}" by "${product.brand}"`;
       if (partialCount > 0) {
         alert(`Enriched ${successCount} products! ${partialCount} used fallback categorization due to API issues. Check the table to see the results!`);
       } else {
-        alert(`Successfully enriched all ${successCount} products using OpenAI!\n\nThe Product Category and Google Category columns are now populated with AI-generated categories. Check the table to see the results!`);
+        alert(`Successfully enriched all ${successCount} products using Gemini AI!\n\nThe Product Category and Google Category columns are now populated with AI-generated categories. Check the table to see the results!`);
       }
 
     } catch (error) {
-      console.error('Enrichment process error:', error);
+      console.error('Gemini enrichment process error:', error);
       
-      // Reset products back to pending status on error
       setProducts(prev => prev.map(p => 
         productIds.includes(p.id) 
           ? { ...p, enrichmentStatus: 'pending' as const }
@@ -1100,11 +1120,11 @@ Product to categorize: "${product.name}" by "${product.brand}"`;
         errorMessage = error.message;
       }
       
-      alert(`Enrichment failed: ${errorMessage}\n\nPlease check your OpenAI API configuration. Make sure REACT_APP_OPENAI_API_KEY is set correctly in your environment variables.`);
+      alert(`Gemini enrichment failed: ${errorMessage}\n\nPlease check your Gemini API configuration. Make sure REACT_APP_GEMINI_API_KEY is set correctly in your environment variables.`);
     } finally {
       setIsEnriching(false);
       setSelectedProducts([]);
-      console.log('Enrichment process completed');
+      console.log('Gemini enrichment process completed');
     }
   };
 
@@ -1149,11 +1169,11 @@ REQUIRED JSON FORMAT:
 
 Attribute to generate: "${attributeName}"`;
 
-          const openaiResponse = await callOpenAIAPI(enrichmentPrompt);
+          const geminiResponse = await callGeminiAPI(enrichmentPrompt);
           
           let responseText = '';
-          if (openaiResponse.choices && openaiResponse.choices[0] && openaiResponse.choices[0].message) {
-            responseText = openaiResponse.choices[0].message.content;
+          if (geminiResponse.choices && geminiResponse.choices[0] && geminiResponse.choices[0].message) {
+            responseText = geminiResponse.choices[0].message.content;
           }
 
           let attributeData;
@@ -1184,7 +1204,7 @@ Attribute to generate: "${attributeName}"`;
         return enrichedProduct || existingProduct;
       }));
 
-      alert(`Successfully enriched "${attributeName}" for ${enrichedProducts.length} products using OpenAI!`);
+      alert(`Successfully enriched "${attributeName}" for ${enrichedProducts.length} products using Gemini AI!`);
 
     } catch (error) {
       console.error('Attribute enrichment error:', error);
@@ -1409,8 +1429,8 @@ Attribute to generate: "${attributeName}"`;
     <div className="main-view">
       <div className="page-header">
         <div className="header-content">
-          <h1 className="page-title">AI Product Hub</h1>
-          <p className="page-subtitle">{products.length} Products | Main Products</p>
+          <h1 className="page-title">AI Product Hub (Gemini-Powered)</h1>
+          <p className="page-subtitle">{products.length} Products | Gemini AI Enrichment</p>
         </div>
         <div className="header-actions">
           <button 
@@ -1484,12 +1504,12 @@ Attribute to generate: "${attributeName}"`;
             
             <div className="filter-item">
               <label className="filter-label">Google Category</label>
-              <select 
+                            <select 
                 className="filter-select"
                 value={filters.googleCategory}
                 onChange={(e) => handleFilterChange('googleCategory', e.target.value)}
               >
-                <option value="">All Google Cat</option>
+                <option value="">All Google Categories</option>
                 {googleCategories.map(cat => (
                   <option key={cat} value={cat}>{cat.length > 30 ? `${cat.substring(0, 30)}...` : cat}</option>
                 ))}
@@ -1512,7 +1532,7 @@ Attribute to generate: "${attributeName}"`;
           </div>
 
           <div className="filter-row">
-                        <div className="filter-item">
+            <div className="filter-item">
               <label className="filter-label">Created On (Start)</label>
               <input
                 type="date"
