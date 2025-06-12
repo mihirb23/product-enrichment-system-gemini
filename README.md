@@ -16,7 +16,7 @@ Transform basic product information (name + brand) into fully categorized produc
 ### Product Management
 - **Smart Filters**: Hide/show filters, search by category, status, date range
 - **Bulk Operations**: CSV import, multi-select enrichment
-- **AI Enrichment**: One-click categorization using OpenAI
+- **AI Enrichment**: One-click categorization using Gemini
 - **CRUD Operations**: Add, edit, copy, delete products
 
 ### Attribute Management  
