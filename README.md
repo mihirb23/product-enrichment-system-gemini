@@ -1,6 +1,6 @@
 # AI Product Hub
 
-An intelligent product enrichment platform that automatically categorizes and enriches e-commerce products using OpenAI's GPT-3.5-turbo API.
+An intelligent product enrichment platform that automatically categorizes and enriches e-commerce products using Gemini API.
 
 ## Live Demo
 https://product-enrichment-system.vercel.app/ 
@@ -37,7 +37,7 @@ Output: Electronics | Electronics > Audio > Audio Components > Headphones
 
 ## Tech Stack
 - **Frontend**: React 18 + TypeScript
-- **AI**: OpenAI GPT-3.5-turbo API
+- **AI**: GEMINI API
 - **Icons**: Lucide React
 - **Deployment**: Vercel
 - **Styling**: Custom CSS
