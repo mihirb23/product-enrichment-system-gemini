@@ -2,7 +2,7 @@
   "name": "ai-product-hub",
   "version": "0.1.0",
   "private": true,
-  "homepage": ".",
+  "homepage": "https://mihirb23.github.io/product-enrichment-system-gemini",
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "@testing-library/jest-dom": "^5.16.4",
