@@ -44,7 +44,7 @@ Output: Electronics | Electronics > Audio > Audio Components > Headphones
 
 ## Deployment
 - **Production**: Deployed on Vercel with automatic GitHub integration
-- **Environment**: OpenAI API key configured in Vercel dashboard
+- **Environment**: Gemini API key configured in Vercel dashboard
 
 
 # product-enrichment-system
